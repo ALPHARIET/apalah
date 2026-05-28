@@ -4,7 +4,49 @@
 
 import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
 import { FaceMesh } from 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
-import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+
+// NOTE: some CDN builds of MediaPipe may not export `Camera` as a named export.
+// To avoid import errors in browsers/contexts where that module shape differs,
+// provide a small local `Camera` wrapper that uses `navigator.mediaDevices.getUserMedia`.
+class Camera {
+  constructor(videoElement, { onFrame = async () => {}, width = 640, height = 480 } = {}) {
+    this.video = videoElement;
+    this.onFrame = onFrame;
+    this.width = width;
+    this.height = height;
+    this._stream = null;
+    this._raf = null;
+    this._running = false;
+  }
+
+  async start() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('getUserMedia not available');
+    }
+    const constraints = { video: { width: this.width, height: this.height, facingMode: 'user' } };
+    this._stream = await navigator.mediaDevices.getUserMedia(constraints);
+    this.video.srcObject = this._stream;
+    await this.video.play();
+    this._running = true;
+
+    const loop = async () => {
+      if (!this._running) return;
+      try { await this.onFrame(); } catch (e) { console.warn('Camera onFrame error', e); }
+      this._raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+
+  async stop() {
+    this._running = false;
+    if (this._raf) cancelAnimationFrame(this._raf);
+    if (this.video && !this.video.paused) this.video.pause();
+    if (this._stream) {
+      this._stream.getTracks().forEach(t => t.stop());
+      this._stream = null;
+    }
+  }
+}
 
 // ----- UI elements -----
 const video = document.getElementById('input_video');
