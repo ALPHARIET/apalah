@@ -1,0 +1,36 @@
+:root{
+  --bg:#071026;
+  --panel:#071425;
+  --muted:#94a3b8;
+  --accent:#7c3aed;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,var(--bg),#071425);color:#e6eef8}
+.app{max-width:1100px;margin:0 auto;padding:16px}
+.header{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.header h1{margin:0;font-size:20px}
+.subtitle{margin:0;color:var(--muted);font-size:13px}
+.main{display:flex;flex-direction:column;gap:12px}
+@media(min-width:900px){.main{flex-direction:row}}
+.viewer{position:relative;width:100%;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+#input_video{display:none;width:100%;height:auto;transform:scaleX(-1)}
+#three-container{position:absolute;inset:0;pointer-events:none}
+.controls{padding:12px;background:rgba(255,255,255,0.02);border-radius:12px;display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.controls-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.controls button,.controls select{padding:8px 12px;border-radius:8px;border:0;background:rgba(255,255,255,0.06);color:inherit;cursor:pointer}
+.controls button:disabled{opacity:0.5;cursor:not-allowed}
+.meta{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:13px}
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6);z-index:1000}
+.modal.hidden{display:none}
+.modal-content{background:#071425;padding:12px;border-radius:10px;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;gap:8px;align-items:center}
+.modal-actions{display:flex;gap:8px}
+.modal canvas{max-width:100%;height:auto;border-radius:6px}
+.footer{margin-top:10px;color:var(--muted);font-size:12px;text-align:center}
+
+/* small helpers */
+.controls label{font-size:13px;color:var(--muted)}
+.controls a{color:var(--accent);text-decoration:none}
+
+/* Debug overlay (landmarks) */
+#debugCanvas{position:absolute;inset:0;pointer-events:none;z-index:20}
+

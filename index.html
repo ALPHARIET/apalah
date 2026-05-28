@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>WebAR Face Filter - Grafika Komputer</title>
+  <link rel="stylesheet" href="styles/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>WebAR Face Filter</h1>
+      <p class="subtitle">MediaPipe FaceMesh + Three.js + OpenCV.js — Demo tugas kuliah</p>
+    </header>
+
+    <main class="main">
+      <section class="viewer" id="viewer">
+        <!-- Video (hidden) is used as source for MediaPipe; we render 3D overlay with Three.js -->
+        <video id="input_video" autoplay playsinline muted></video>
+        <!-- Three.js renderer will be appended here -->
+        <div id="three-container"></div>
+        <!-- Debug overlay to draw landmarks (optional) -->
+        <canvas id="debugCanvas" class="debug-canvas" aria-hidden="true"></canvas>
+      </section>
+
+      <aside class="controls">
+        <div class="controls-row">
+          <button id="btnStart">Start Camera</button>
+          <button id="btnStop" disabled>Stop</button>
+          <button id="btnCapture" disabled>Screenshot</button>
+        </div>
+
+        <div class="controls-row">
+          <label for="filterSelect">Filter (setelah capture)</label>
+          <select id="filterSelect">
+            <option value="none">None</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="canny">Edge detection</option>
+            <option value="blur">Gaussian blur</option>
+          </select>
+          <button id="btnApplyFilter" disabled>Apply Filter</button>
+        </div>
+
+        <div class="controls-row">
+          <label><input type="checkbox" id="chkDebug"> Show landmarks</label>
+          <label><input type="checkbox" id="chkPerf"> Performance mode (mobile)</label>
+        </div>
+
+        <div class="meta">
+          <div id="status">Status: idle</div>
+          <div id="fps">FPS: --</div>
+        </div>
+      </aside>
+
+    </main>
+
+    <!-- Modal for captured image and OpenCV filters -->
+    <div id="captureModal" class="modal hidden">
+      <div class="modal-content">
+        <canvas id="captureCanvas"></canvas>
+        <div class="modal-actions">
+          <a id="downloadLink" download="capture.png">Download</a>
+          <button id="closeModal">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <small>Project dibuat untuk tugas Grafika Komputer & Pengolahan Citra Digital</small>
+    </footer>
+  </div>
+
+  <!-- OpenCV.js (async) -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="console.log('OpenCV loaded')"></script>
+  <!-- Main application (ES modules) -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
