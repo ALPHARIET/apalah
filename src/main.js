@@ -67,6 +67,7 @@ const captureModal = document.getElementById('captureModal');
 const captureCanvas = document.getElementById('captureCanvas');
 const downloadLink = document.getElementById('downloadLink');
 const closeModal = document.getElementById('closeModal');
+const arFilterSelect = document.getElementById('arFilterSelect');
 
 // ----- Global state -----
 let cameraUtils = null; // MediaPipe Camera wrapper
@@ -78,6 +79,10 @@ let lastFpsUpdate = performance.now(), frames = 0;
 let smoothPos = new THREE.Vector3(0,0,0);
 let smoothRotZ = 0;
 let smoothScale = 1;
+
+// AR Filters state
+let currentFilter = 'glasses_3d';
+let filters = {};
 
 // ----- Utilities -----
 function setStatus(msg) { statusEl.textContent = `Status: ${msg}`; }
@@ -125,8 +130,92 @@ function initThree(width = 640, height = 480) {
   glassesGroup.visible = false;
   scene.add(glassesGroup);
 
+  filters['glasses_3d'] = glassesGroup;
+
+  // Create Sunglasses mesh
+  const sunglassesMat = new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide });
+  const sunglassesGeom = new THREE.PlaneGeometry(140, 140);
+  const sunglassesMesh = new THREE.Mesh(sunglassesGeom, sunglassesMat);
+  sunglassesMesh.visible = false;
+  scene.add(sunglassesMesh);
+  filters['sunglasses'] = sunglassesMesh;
+
+  // Create Cyberpunk visor mesh
+  const cyberpunkMat = new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide });
+  const cyberpunkGeom = new THREE.PlaneGeometry(150, 150);
+  const cyberpunkMesh = new THREE.Mesh(cyberpunkGeom, cyberpunkMat);
+  cyberpunkMesh.visible = false;
+  scene.add(cyberpunkMesh);
+  filters['cyberpunk'] = cyberpunkMesh;
+
+  // Create Flower Crown mesh
+  const crownMat = new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide });
+  const crownGeom = new THREE.PlaneGeometry(200, 200);
+  crownGeom.translate(0, 100, 0); // Shift upward by 100 units so the pivot is at the bottom center of the crown
+  const crownMesh = new THREE.Mesh(crownGeom, crownMat);
+  crownMesh.visible = false;
+  scene.add(crownMesh);
+  filters['flower_crown'] = crownMesh;
+
   // keep sizes for mapping
   videoWidth = width; videoHeight = height;
+}
+
+// ----- Chroma key transparency helper -----
+function createTransparentTexture(url, removeColor = 'black') {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = url;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+
+      // Make colors close to black transparent
+      if (removeColor === 'black') {
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          // Chroma key threshold
+          if (r < 40 && g < 40 && b < 40) {
+            data[i+3] = 0;
+          }
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      const texture = new THREE.CanvasTexture(canvas);
+      resolve(texture);
+    };
+    img.onerror = (e) => reject(e);
+  });
+}
+
+// ----- Load all PNG assets as transparent textures -----
+async function loadFilterTextures() {
+  const assets = {
+    sunglasses: 'assets/sunglasses.png',
+    cyberpunk: 'assets/cyberpunk.png',
+    flower_crown: 'assets/flower_crown.png'
+  };
+
+  try {
+    const sunglassesTex = await createTransparentTexture(assets.sunglasses, 'black');
+    filters['sunglasses'].material.map = sunglassesTex;
+    filters['sunglasses'].material.needsUpdate = true;
+
+    const cyberpunkTex = await createTransparentTexture(assets.cyberpunk, 'black');
+    filters['cyberpunk'].material.map = cyberpunkTex;
+    filters['cyberpunk'].material.needsUpdate = true;
+
+    const crownTex = await createTransparentTexture(assets.flower_crown, 'black');
+    filters['flower_crown'].material.map = crownTex;
+    filters['flower_crown'].material.needsUpdate = true;
+  } catch (e) {
+    console.error('Failed to load filter textures:', e);
+  }
 }
 
 // ----- FaceMesh setup -----
@@ -155,66 +244,94 @@ function onResults(results) {
     frames = 0; lastFpsUpdate = now;
   }
 
+  // Always clear the debug canvas first so landmarks don't freeze when unchecked
+  if (debugCanvas && debugCanvas.getContext) {
+    const dctx = debugCanvas.getContext('2d');
+    dctx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+  }
+
   if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-    glassesGroup.visible = false;
-    renderer.clear();
-    // clear debug canvas
-    if (debugCanvas && debugCanvas.getContext) {
-      const dctx = debugCanvas.getContext('2d');
-      dctx.clearRect(0,0,debugCanvas.width, debugCanvas.height);
+    for (const key in filters) {
+      if (filters[key]) filters[key].visible = false;
     }
+    renderer.clear();
     return;
   }
 
   const landmarks = results.multiFaceLandmarks[0];
 
-  // compute centroid
-  let cx = 0, cy = 0, cz = 0;
-  for (const p of landmarks) { cx += p.x; cy += p.y; cz += p.z; }
-  cx /= landmarks.length; cy /= landmarks.length; cz /= landmarks.length;
-
-  // find leftmost & rightmost landmark to estimate face width and roll
-  let left = landmarks[0], right = landmarks[0];
-  for (const p of landmarks) {
-    if (p.x < left.x) left = p;
-    if (p.x > right.x) right = p;
+  // Hide all filters by default, we will enable the selected one later
+  for (const key in filters) {
+    if (filters[key]) filters[key].visible = false;
   }
 
-  // map normalized mediapipe coords to three.js centered pixel coords
-  const px = (cx - 0.5) * videoWidth; // x: left->right
-  const py = -(cy - 0.5) * videoHeight; // invert y
+  // Select anchor landmark based on active filter
+  // 168: Nose bridge (between eyes) - best for glasses
+  // 10: Forehead top - best for flower crown
+  let anchor = landmarks[168];
+  if (currentFilter === 'flower_crown') {
+    anchor = landmarks[10];
+  }
 
-  const dx = (right.x - left.x) * videoWidth;
-  const dy = (right.y - left.y) * videoHeight;
+  // Map normalized MediaPipe coordinates to centered pixel coordinates
+  const px = (anchor.x - 0.5) * videoWidth;
+  const py = -(anchor.y - 0.5) * videoHeight;
+  const pz = (anchor.z || 0) * -600;
+
+  // Use fixed landmarks for left eye (33) and right eye (263) to compute face width and rotation
+  const leftEye = landmarks[33];
+  const rightEye = landmarks[263];
+
+  // Map eyes to Three.js coordinates
+  const lx = (leftEye.x - 0.5) * videoWidth;
+  const rx = (rightEye.x - 0.5) * videoWidth;
+  const ly = -(leftEye.y - 0.5) * videoHeight;
+  const ry = -(rightEye.y - 0.5) * videoHeight;
+
+  const dx = rx - lx;
+  const dy = ry - ly;
   const faceWidth = Math.hypot(dx, dy);
-  const angle = Math.atan2(-dy, dx); // roll
 
-  // apply transform to glasses group
-  glassesGroup.visible = true;
-  // apply smoothing (exponential) for stable demo
-  const targetPos = new THREE.Vector3(px, py, (cz || 0) * -600);
-  const baseWidth = 100; // base width of model in pixels
+  // Roll angle (direct angle to match the visual tilt)
+  const angle = Math.atan2(dy, dx);
+
+  // Apply smoothing (exponential moving average) to prevent jitter
+  const targetPos = new THREE.Vector3(px, py, pz);
+  
+  // Custom scale factor (baseWidth) for different filters
+  let baseWidth = 60; // 3D glasses default
+  if (currentFilter === 'sunglasses') {
+    baseWidth = 55;
+  } else if (currentFilter === 'cyberpunk') {
+    baseWidth = 55;
+  } else if (currentFilter === 'flower_crown') {
+    baseWidth = 65;
+  }
+
   const targetScale = faceWidth / baseWidth;
-  const alpha = 0.35; // smoothing factor (0..1)
+  const alpha = 0.35; // smoothing factor
   smoothPos.lerp(targetPos, alpha);
   smoothRotZ = smoothRotZ * (1 - alpha) + angle * alpha;
   smoothScale = smoothScale * (1 - alpha) + targetScale * alpha;
 
-  glassesGroup.position.copy(smoothPos);
-  glassesGroup.scale.set(smoothScale, smoothScale, smoothScale);
-  glassesGroup.rotation.set(0, 0, smoothRotZ);
+  // Apply transforms to the active filter mesh
+  const activeMesh = filters[currentFilter];
+  if (activeMesh) {
+    activeMesh.visible = true;
+    activeMesh.position.copy(smoothPos);
+    activeMesh.scale.set(smoothScale, smoothScale, smoothScale);
+    activeMesh.rotation.set(0, 0, smoothRotZ);
+  }
 
   renderer.render(scene, orthoCamera);
 
-  // draw debug landmarks if enabled
+  // Draw debug landmarks if enabled
   if (chkDebug && chkDebug.checked && debugCanvas && debugCanvas.getContext) {
-    debugCanvas.width = video.videoWidth || videoWidth;
-    debugCanvas.height = video.videoHeight || videoHeight;
+    if (debugCanvas.width !== (video.videoWidth || videoWidth) || debugCanvas.height !== (video.videoHeight || videoHeight)) {
+      debugCanvas.width = video.videoWidth || videoWidth;
+      debugCanvas.height = video.videoHeight || videoHeight;
+    }
     const dctx = debugCanvas.getContext('2d');
-    dctx.clearRect(0,0,debugCanvas.width, debugCanvas.height);
-    dctx.save();
-    dctx.scale(-1,1); // mirror
-    dctx.translate(-debugCanvas.width,0);
     dctx.fillStyle = 'rgba(255,0,120,0.8)';
     for (let i = 0; i < landmarks.length; i++) {
       const p = landmarks[i];
@@ -222,7 +339,6 @@ function onResults(results) {
       const y = p.y * debugCanvas.height;
       dctx.beginPath(); dctx.arc(x,y,1.6,0,Math.PI*2); dctx.fill();
     }
-    dctx.restore();
   }
 }
 
@@ -242,6 +358,8 @@ async function startCamera() {
 
     // recreate renderer with chosen size
     initThree(useWidth, useHeight);
+    setStatus('Memuat aset filter...');
+    await loadFilterTextures();
 
     // If modern API available, use MediaPipe Camera util which wraps getUserMedia
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -317,7 +435,9 @@ async function stopCamera() {
     if (cameraUtils && cameraUtils.stop) await cameraUtils.stop();
     setStatus('Camera berhenti');
     enable(stopBtn, false); enable(captureBtn, false); enable(startBtn, true);
-    glassesGroup.visible = false;
+    for (const key in filters) {
+      if (filters[key]) filters[key].visible = false;
+    }
   } catch (err) {
     console.warn(err);
   }
@@ -334,9 +454,12 @@ function captureScreenshot() {
   // draw mirrored video (mirror to match UX)
   ctx.save(); ctx.scale(-1,1); ctx.drawImage(video, -w, 0, w, h); ctx.restore();
 
-  // draw three overlay (renderer.domElement) on top
+  // draw three overlay (renderer.domElement) on top mirrored to match the mirrored video
   try {
-    ctx.drawImage(renderer.domElement, 0, 0, w, h);
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(renderer.domElement, -w, 0, w, h);
+    ctx.restore();
   } catch (e) {
     console.warn('Could not draw overlay canvas to output', e);
   }
@@ -392,6 +515,12 @@ closeModal.addEventListener('click', () => { captureModal.classList.add('hidden'
 
 // close button may be absent if HTML is minimal — safe guard
 if (closeModal) closeModal.addEventListener('click', () => captureModal.classList.add('hidden'));
+
+if (arFilterSelect) {
+  arFilterSelect.addEventListener('change', (e) => {
+    currentFilter = e.target.value;
+  });
+}
 
 // initial UI state
 setStatus('idle');
