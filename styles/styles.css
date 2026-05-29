@@ -13,7 +13,7 @@ html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe U
 .main{display:flex;flex-direction:column;gap:12px}
 @media(min-width:900px){.main{flex-direction:row}}
 .viewer{position:relative;width:100%;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
-#input_video{display:none;width:100%;height:auto;transform:scaleX(-1)}
+#input_video{position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;transform:scaleX(-1)}
 #three-container{position:absolute;inset:0;pointer-events:none}
 .controls{padding:12px;background:rgba(255,255,255,0.02);border-radius:12px;display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .controls-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}

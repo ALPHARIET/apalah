@@ -3,7 +3,9 @@
 // Integrates: MediaPipe FaceMesh (face tracking), Three.js (3D render), OpenCV.js (post-capture filters)
 
 import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
-import { FaceMesh } from 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
+
+// FaceMesh is loaded globally via index.html script tag
+const FaceMesh = window.FaceMesh;
 
 // NOTE: some CDN builds of MediaPipe may not export `Camera` as a named export.
 // To avoid import errors in browsers/contexts where that module shape differs,
@@ -129,7 +131,11 @@ function initThree(width = 640, height = 480) {
 
 // ----- FaceMesh setup -----
 async function initFaceMesh() {
-  faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+  const FaceMeshClass = window.FaceMesh || FaceMesh;
+  if (!FaceMeshClass) {
+    throw new Error('MediaPipe FaceMesh library not loaded. Please check network connection or script source.');
+  }
+  faceMesh = new FaceMeshClass({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
   faceMesh.setOptions({
     maxNumFaces: 1,
     refineLandmarks: true,
