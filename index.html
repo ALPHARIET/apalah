@@ -31,17 +31,6 @@
         </div>
 
         <div class="controls-row">
-          <label for="filterSelect">Filter (setelah capture)</label>
-          <select id="filterSelect">
-            <option value="none">None</option>
-            <option value="grayscale">Grayscale</option>
-            <option value="canny">Edge detection</option>
-            <option value="blur">Gaussian blur</option>
-          </select>
-          <button id="btnApplyFilter" disabled>Apply Filter</button>
-        </div>
-
-        <div class="controls-row">
           <label for="arFilterSelect">AR Filter (Real-time)</label>
           <select id="arFilterSelect">
             <option value="glasses_3d">Classic 3D Glasses</option>
@@ -68,6 +57,18 @@
     <div id="captureModal" class="modal hidden">
       <div class="modal-content">
         <canvas id="captureCanvas"></canvas>
+        
+        <div class="modal-filter-row">
+          <label for="filterSelect">Filter Citra:</label>
+          <select id="filterSelect">
+            <option value="none">None (Asli)</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="canny">Edge detection</option>
+            <option value="blur">Gaussian blur</option>
+          </select>
+          <button id="btnApplyFilter" disabled>Apply Filter</button>
+        </div>
+
         <div class="modal-actions">
           <a id="downloadLink" download="capture.png">Download</a>
           <button id="closeModal">Close</button>

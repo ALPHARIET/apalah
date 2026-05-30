@@ -83,6 +83,7 @@ let smoothScale = 1;
 // AR Filters state
 let currentFilter = 'glasses_3d';
 let filters = {};
+let originalCanvas = document.createElement('canvas');
 
 // ----- Utilities -----
 function setStatus(msg) { statusEl.textContent = `Status: ${msg}`; }
@@ -468,6 +469,13 @@ function captureScreenshot() {
   captureCanvas.width = w; captureCanvas.height = h;
   const cctx = captureCanvas.getContext('2d');
   cctx.clearRect(0,0,w,h); cctx.drawImage(tmp,0,0);
+
+  // backup original capture for non-destructive filter applications
+  originalCanvas.width = w; originalCanvas.height = h;
+  const octx = originalCanvas.getContext('2d');
+  octx.clearRect(0,0,w,h); octx.drawImage(tmp,0,0);
+
+  filterSelect.value = 'none'; // reset filter dropdown in modal
   downloadLink.href = tmp.toDataURL('image/png');
   captureModal.classList.remove('hidden');
   enable(applyFilterBtn, true);
@@ -476,7 +484,7 @@ function captureScreenshot() {
 // ----- OpenCV filters (post-capture) -----
 function applyOpenCVFilter(type) {
   if (!window.cv || !cv || !cv.Mat) { alert('OpenCV.js belum siap. Tunggu beberapa detik dan coba lagi.'); return; }
-  const src = cv.imread(captureCanvas);
+  const src = cv.imread(originalCanvas);
   const dst = new cv.Mat();
 
   try {
@@ -515,6 +523,12 @@ closeModal.addEventListener('click', () => { captureModal.classList.add('hidden'
 
 // close button may be absent if HTML is minimal — safe guard
 if (closeModal) closeModal.addEventListener('click', () => captureModal.classList.add('hidden'));
+
+if (filterSelect) {
+  filterSelect.addEventListener('change', () => {
+    applyOpenCVFilter(filterSelect.value);
+  });
+}
 
 if (arFilterSelect) {
   arFilterSelect.addEventListener('change', (e) => {
